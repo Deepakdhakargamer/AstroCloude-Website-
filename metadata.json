@@ -1,0 +1,6 @@
+{
+  "name": "AstroCloude Hosting",
+  "description": "Premium, modern, fully animated cloud and game hosting provider for Minecraft, VPS, Discord bots, and dedicated servers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
