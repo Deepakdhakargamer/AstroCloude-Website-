@@ -5,10 +5,10 @@ import {
   Search, Check, X, RefreshCw, Lock, Unlock, Key, Eye, EyeOff, Save,
   Sliders, ArrowUp, ArrowDown, Filter, MessageSquare, Send, CheckCircle2,
   AlertCircle, ChevronRight, Sparkles, Terminal, Activity, Globe, IndianRupee,
-  Cpu, Upload, Image as ImageIcon
-, ChevronDown, CreditCard } from "lucide-react";
+  Cpu, Upload, Image as ImageIcon, User, Tag, ChevronDown, CreditCard 
+} from "lucide-react";
 import { 
-  AdminOrder, AdminCategory, AdminHostingPlan, AdminSupportTicket, AdminUser, AdminRole, AdminTicketMessage, AdminFeature 
+  AdminOrder, AdminCategory, AdminHostingPlan, AdminSupportTicket, AdminUser, AdminRole, AdminTicketMessage, AdminFeature, AdminCoupon 
 } from '../types';
 import { getStoredCategories, saveStoredCategories } from '../utils/categorySync';
 import { getStoredFeatures, saveStoredFeatures } from '../utils/featureSync';
@@ -26,7 +26,16 @@ import { getStoredPaymentSettings, saveStoredPaymentSettings, PaymentSettings } 
 import { getStoredOrders, updateStoredOrders } from '../utils/orderSync';
 import { AdminPlanManagementTab } from './AdminPlanManagementTab';
 import { AdminOrderManagementTab } from './AdminOrderManagementTab';
-
+import { getStoredCoupons } from '../utils/couponSync';
+import { AdminCouponManagementTab } from './AdminCouponManagementTab';
+import { 
+  getStoredUsers, 
+  saveStoredUsers, 
+  createUserByAdmin, 
+  updateUser, 
+  deleteUser, 
+  resetUserPassword 
+} from '../utils/userSync';
 
 const INITIAL_USERS: AdminUser[] = [];
 const INITIAL_ROLES: AdminRole[] = [
@@ -88,10 +97,12 @@ const INITIAL_CATEGORIES: AdminCategory[] = [
 
 interface AdminPanelProps {
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  currentUser?: AdminUser | null;
+  onLogout?: () => void;
 }
 
-export function AdminPanel({ onShowToast }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'categories' | 'plans' | 'tickets' | 'users' | 'roles' | 'features' | 'staff' | 'payment'>('categories');
+export function AdminPanel({ onShowToast, currentUser, onLogout }: AdminPanelProps) {
+  const [activeTab, setActiveTab] = useState<'categories' | 'plans' | 'tickets' | 'users' | 'roles' | 'features' | 'staff' | 'payment' | 'orders' | 'coupons'>('categories');
   const [deleteCategoryModal, setDeleteCategoryModal] = useState<{ open: boolean; category: any | null }>({ open: false, category: null });
 
 
@@ -101,6 +112,16 @@ export function AdminPanel({ onShowToast }: AdminPanelProps) {
   const [plans, setPlans] = useState<AdminHostingPlan[]>(getStoredPlans());
   const [users, setUsers] = useState<AdminUser[]>(INITIAL_USERS);
   const [tickets, setTickets] = useState<AdminSupportTicket[]>(() => getStoredTickets());
+
+  useEffect(() => {
+    getStoredUsers().then(data => setUsers(data));
+    const handleUsersUpdate = (e: any) => {
+      if (e.detail) setUsers(e.detail);
+      else getStoredUsers().then(data => setUsers(data));
+    };
+    window.addEventListener('astro_users_changed', handleUsersUpdate);
+    return () => window.removeEventListener('astro_users_changed', handleUsersUpdate);
+  }, []);
 
   useEffect(() => {
     const handleTicketUpdate = (e: Event) => {
@@ -124,6 +145,7 @@ export function AdminPanel({ onShowToast }: AdminPanelProps) {
   };
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(() => getStoredPaymentSettings());
   const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [coupons, setCoupons] = useState<AdminCoupon[]>([]);
   
   useEffect(() => {
     getStoredOrders().then(data => setOrders(data));
@@ -131,6 +153,18 @@ export function AdminPanel({ onShowToast }: AdminPanelProps) {
     window.addEventListener('astro_orders_changed', handleOrdersUpdate);
     return () => {
         window.removeEventListener('astro_orders_changed', handleOrdersUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    getStoredCoupons().then(data => setCoupons(data));
+    const handleCouponsUpdate = (e: any) => {
+      if (e.detail) setCoupons(e.detail);
+      else getStoredCoupons().then(data => setCoupons(data));
+    };
+    window.addEventListener('astro_coupons_changed', handleCouponsUpdate);
+    return () => {
+      window.removeEventListener('astro_coupons_changed', handleCouponsUpdate);
     };
   }, []);
   const updatePaymentAndSync = (newSettings: PaymentSettings) => {
@@ -282,6 +316,10 @@ export function AdminPanel({ onShowToast }: AdminPanelProps) {
   
   // User Modal States
   const [userModal, setUserModal] = useState<{ open: boolean; editId?: string }>({ open: false });
+  const [userDetailsModal, setUserDetailsModal] = useState<{ open: boolean; user: AdminUser | null }>({ open: false, user: null });
+  const [editUserModal, setEditUserModal] = useState<{ open: boolean; user: AdminUser | null }>({ open: false, user: null });
+  const [resetPassModal, setResetPassModal] = useState<{ open: boolean; user: AdminUser | null }>({ open: false, user: null });
+  const [newPassInput, setNewPassInput] = useState('');
   
   // Role Modal States
   const [roleModal, setRoleModal] = useState<{ open: boolean; editId?: string }>({ open: false });
@@ -289,8 +327,10 @@ export function AdminPanel({ onShowToast }: AdminPanelProps) {
 
   // Form states for User
   const [userName, setUserName] = useState('');
+  const [userUsername, setUserUsername] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [userRoleSelect, setUserRoleSelect] = useState(roles.length > 0 ? roles[0].name : 'Standard User');
+  const [userStatusSelect, setUserStatusSelect] = useState<'active' | 'suspended' | 'banned'>('active');
   const [userPassword, setUserPassword] = useState('');
 
   // Form states for Role
@@ -330,7 +370,8 @@ export function AdminPanel({ onShowToast }: AdminPanelProps) {
               { id: 'roles', label: `Roles & RBAC (${roles.length})`, icon: <Shield className="w-4 h-4 text-rose-400" /> },
               { id: 'staff', label: `Staff Management (${staff.length})`, icon: <Contact className="w-4 h-4 text-orange-400" /> },
               { id: 'payment', label: `Payment Settings`, icon: <CreditCard className="w-4 h-4 text-violet-400" /> },
-              { id: 'orders', label: `Orders Management`, icon: <ShoppingCart className="w-4 h-4 text-cyan-400" /> },
+              { id: 'coupons', label: `Coupon Management (${coupons.length})`, icon: <Tag className="w-4 h-4 text-pink-400" /> },
+              { id: 'orders', label: `Orders Management (${orders.length})`, icon: <ShoppingCart className="w-4 h-4 text-cyan-400" /> },
             ].map(item => (
               <button
                 key={item.id}
@@ -387,6 +428,21 @@ export function AdminPanel({ onShowToast }: AdminPanelProps) {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {currentUser && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span className="text-white font-semibold">{currentUser.name}</span>
+                <span className="text-[10px] text-purple-400">({currentUser.role || 'Admin'})</span>
+              </div>
+            )}
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 text-xs font-semibold border border-white/10 transition-colors"
+              >
+                <span>Logout</span>
+              </button>
+            )}
             <span className="px-4 py-2 rounded-xl bg-rose-950/40 border border-rose-500/30 shadow-lg shadow-rose-900/20 text-rose-300 text-xs font-mono font-bold flex items-center gap-2 backdrop-blur-md">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -1722,7 +1778,7 @@ export function AdminPanel({ onShowToast }: AdminPanelProps) {
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                 <input
                   type="text"
-                  placeholder="Search users..."
+                  placeholder="Search by name, username, email, or role..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-slate-950 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
@@ -1731,9 +1787,11 @@ export function AdminPanel({ onShowToast }: AdminPanelProps) {
               <button
                 onClick={() => {
                   setUserName('');
+                  setUserUsername('');
                   setUserEmail('');
                   setUserPassword('');
                   setUserRoleSelect(roles.length > 0 ? roles[0].name : 'Standard User');
+                  setUserStatusSelect('active');
                   setUserModal({ open: true });
                 }}
                 className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-xs font-bold text-white shadow-lg shadow-purple-600/30 flex items-center gap-1.5"
@@ -1748,22 +1806,43 @@ export function AdminPanel({ onShowToast }: AdminPanelProps) {
                 <thead>
                   <tr className="border-b border-white/10 text-xs text-slate-400">
                     <th className="py-3 font-semibold">User</th>
+                    <th className="py-3 font-semibold">Username</th>
                     <th className="py-3 font-semibold">Role</th>
                     <th className="py-3 font-semibold">Status</th>
                     <th className="py-3 font-semibold">Joined</th>
+                    <th className="py-3 font-semibold">Servers</th>
                     <th className="py-3 text-right font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="text-xs">
-                  {users.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase())).map(u => (
-                    <tr key={u.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                  {users.filter(u => 
+                    u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    (u.username && u.username.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                    (u.role && u.role.toLowerCase().includes(searchQuery.toLowerCase()))
+                  ).map(u => (
+                    <tr key={u.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                       <td className="py-3">
-                        <div className="font-semibold text-white">{u.name}</div>
-                        <div className="text-[10px] text-slate-400">{u.email}</div>
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shrink-0">
+                            {u.name ? u.name.charAt(0).toUpperCase() : 'U'}
+                          </div>
+                          <div>
+                            <div className="font-semibold text-white">{u.name}</div>
+                            <div className="text-[10px] text-slate-400">{u.email}</div>
+                          </div>
+                        </div>
                       </td>
                       <td className="py-3">
-                        <span className="px-2 py-0.5 rounded bg-purple-950/40 text-purple-300 border border-purple-500/30 text-[10px] font-bold">
-                          {u.roles[0] || 'User'}
+                        <span className="font-mono text-purple-300 text-xs">@{u.username || 'user'}</span>
+                      </td>
+                      <td className="py-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          u.role === 'Admin' || (u.roles && u.roles.includes('Administrator'))
+                            ? 'bg-rose-950/40 text-rose-300 border-rose-500/30'
+                            : 'bg-purple-950/40 text-purple-300 border-purple-500/30'
+                        }`}>
+                          {u.role || u.roles[0] || 'User'}
                         </span>
                       </td>
                       <td className="py-3">
@@ -1775,46 +1854,82 @@ export function AdminPanel({ onShowToast }: AdminPanelProps) {
                           {u.status}
                         </span>
                       </td>
-                      <td className="py-3 text-slate-400 text-[10px]">{u.joinedDate}</td>
-                      <td className="py-3 text-right space-x-2">
+                      <td className="py-3 text-slate-400 text-[10px]">{u.joinedDate || 'Recent'}</td>
+                      <td className="py-3 text-slate-300 font-semibold">{u.serversCount || 0}</td>
+                      <td className="py-3 text-right space-x-1.5 whitespace-nowrap">
+                        {/* View Details */}
+                        <button
+                          onClick={() => setUserDetailsModal({ open: true, user: u })}
+                          className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 transition-colors"
+                          title="View Details"
+                        >
+                          <Eye className="w-3.5 h-3.5 inline mr-1" />
+                          View
+                        </button>
+
+                        {/* Edit User */}
                         <button
                           onClick={() => {
+                            setUserName(u.name);
+                            setUserUsername(u.username || '');
+                            setUserEmail(u.email);
+                            setUserRoleSelect(u.role || (u.roles && u.roles[0]) || 'Standard User');
+                            setUserStatusSelect(u.status || 'active');
+                            setEditUserModal({ open: true, user: u });
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-purple-950/40 text-purple-300 border border-purple-500/30 hover:bg-purple-900/50 transition-colors"
+                          title="Edit User"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 inline mr-1" />
+                          Edit
+                        </button>
+
+                        {/* Suspend / Unsuspend */}
+                        <button
+                          onClick={async () => {
                             const newStatus = u.status === 'active' ? 'suspended' : 'active';
-                            setUsers(users.map(item => item.id === u.id ? { ...item, status: newStatus } : item));
-                            onShowToast(`User status updated to ${newStatus}`, 'success');
+                            await updateUser(u.id, { status: newStatus });
+                            onShowToast(`User "${u.name}" status changed to ${newStatus}`, 'success');
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300"
+                          className={`px-2.5 py-1 rounded-lg transition-colors ${
+                            u.status === 'active'
+                              ? 'bg-amber-950/40 text-amber-300 border border-amber-500/30 hover:bg-amber-900/50'
+                              : 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-900/50'
+                          }`}
                         >
-                          {u.status === 'active' ? 'Suspend' : 'Unsuspend'}
+                          {u.status === 'active' ? 'Suspend' : 'Activate'}
                         </button>
+
+                        {/* Reset Password */}
                         <button
                           onClick={() => {
-                            const newPass = prompt('Enter new temporary password for ' + u.email);
-                            if (newPass) {
-                              onShowToast('Password reset successfully!', 'success');
-                            }
+                            setNewPassInput('');
+                            setResetPassModal({ open: true, user: u });
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-blue-950/40 text-blue-300 border border-blue-500/30 hover:bg-blue-900/50"
+                          className="px-2.5 py-1 rounded-lg bg-blue-950/40 text-blue-300 border border-blue-500/30 hover:bg-blue-900/50 transition-colors"
                         >
-                          Reset Pass
+                          <Key className="w-3.5 h-3.5 inline mr-1" />
+                          Reset
                         </button>
+
+                        {/* Delete User */}
                         <button
                           onClick={() => {
                             setConfirmModal({
                               open: true,
-                              title: 'Delete User',
-                              message: `Are you sure you want to delete user "${u.name}"?`,
+                              title: 'Delete User Account',
+                              message: `Are you sure you want to permanently delete user "${u.name}" (@${u.username})? This action cannot be undone.`,
                               confirmText: 'Delete User',
                               confirmStyle: 'bg-rose-600 hover:bg-rose-500 shadow-rose-600/30',
-                              onConfirm: () => {
-                                setUsers(users.filter(item => item.id !== u.id));
-                                onShowToast('User deleted', 'info');
+                              onConfirm: async () => {
+                                await deleteUser(u.id);
+                                onShowToast('User deleted successfully', 'info');
                               }
                             });
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-rose-950/40 text-rose-400 border border-rose-500/30 hover:bg-rose-900/50"
+                          className="px-2.5 py-1 rounded-lg bg-rose-950/40 text-rose-400 border border-rose-500/30 hover:bg-rose-900/50 transition-colors"
                         >
-                          Delete
+                          <Trash2 className="w-3.5 h-3.5 inline" />
                         </button>
                       </td>
                     </tr>
@@ -1823,15 +1938,18 @@ export function AdminPanel({ onShowToast }: AdminPanelProps) {
               </table>
             </div>
 
-            {/* User Modal */}
+            {/* Modal 1: Create User Modal */}
             <AnimatePresence>
             {userModal.open && (
               <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <motion.div initial={{scale:0.95, y:20}} animate={{scale:1, y:0}} exit={{scale:0.95, y:20}} className="bg-slate-900 border border-white/20 rounded-3xl p-6 sm:p-8 max-w-md w-full space-y-6 shadow-2xl">
-                  <h3 className="text-lg font-bold text-white">Create New User Account</h3>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Plus className="w-5 h-5 text-purple-400" />
+                    Create New User Account
+                  </h3>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">Full Name</label>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Full Name *</label>
                       <input
                         type="text"
                         value={userName}
@@ -1841,7 +1959,17 @@ export function AdminPanel({ onShowToast }: AdminPanelProps) {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">Email Address</label>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Username *</label>
+                      <input
+                        type="text"
+                        value={userUsername}
+                        onChange={(e) => setUserUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
+                        placeholder="johndoe"
+                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Email Address *</label>
                       <input
                         type="email"
                         value={userEmail}
@@ -1850,28 +1978,39 @@ export function AdminPanel({ onShowToast }: AdminPanelProps) {
                         className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500"
                       />
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">Initial Role</label>
-                      <div className="relative">
-<select
-                        value={userRoleSelect}
-                        onChange={(e) => setUserRoleSelect(e.target.value)}
-                        className="w-full bg-slate-950 border border-white/10 rounded-xl pl-4 pr-10 py-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500 appearance-none"
-                      >
-                        {roles.map(r => (
-                          <option key={r.id} value={r.name}>{r.name}</option>
-                        ))}
-                      </select>
-<ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Role</label>
+                        <select
+                          value={userRoleSelect}
+                          onChange={(e) => setUserRoleSelect(e.target.value)}
+                          className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-3 text-xs text-white focus:outline-none focus:border-purple-500"
+                        >
+                          <option value="Standard User">Standard User</option>
+                          <option value="Administrator">Administrator</option>
+                          <option value="Staff Support">Staff Support</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Status</label>
+                        <select
+                          value={userStatusSelect}
+                          onChange={(e) => setUserStatusSelect(e.target.value as any)}
+                          className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-3 text-xs text-white focus:outline-none focus:border-purple-500"
+                        >
+                          <option value="active">Active</option>
+                          <option value="suspended">Suspended</option>
+                          <option value="banned">Banned</option>
+                        </select>
+                      </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">Password</label>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Password *</label>
                       <input
                         type="password"
                         value={userPassword}
                         onChange={(e) => setUserPassword(e.target.value)}
-                        placeholder="Secure password"
+                        placeholder="At least 6 characters (hashed securely)"
                         className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500"
                       />
                     </div>
@@ -1879,20 +2018,27 @@ export function AdminPanel({ onShowToast }: AdminPanelProps) {
                   <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
                     <button onClick={() => setUserModal({ open: false })} className="px-4 py-2.5 rounded-xl text-xs bg-white/10 text-slate-300">Cancel</button>
                     <button
-                      onClick={() => {
-                        if (!userName || !userEmail) return;
-                        const newU: AdminUser = {
-                          id: 'usr-' + Date.now(),
+                      onClick={async () => {
+                        if (!userName.trim() || !userEmail.trim() || !userPassword) {
+                          onShowToast('Please fill all required fields', 'error');
+                          return;
+                        }
+                        const finalRole = userRoleSelect === 'Administrator' ? 'Admin' : 'User';
+                        const res = await createUserByAdmin({
                           name: userName,
+                          username: userUsername || userName.toLowerCase().replace(/\s+/g, ''),
                           email: userEmail,
+                          role: finalRole,
                           roles: [userRoleSelect],
-                          status: 'active',
-                          joinedDate: new Date().toISOString().substring(0, 10),
-                          serversCount: 0
-                        };
-                        setUsers([...users, newU]);
-                        onShowToast('User created successfully!', 'success');
-                        setUserModal({ open: false });
+                          status: userStatusSelect,
+                          password: userPassword
+                        });
+                        if (res.success) {
+                          onShowToast('User created successfully in database!', 'success');
+                          setUserModal({ open: false });
+                        } else {
+                          onShowToast(res.error || 'Failed to create user', 'error');
+                        }
                       }}
                       className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-500 shadow-lg shadow-purple-600/30"
                     >
@@ -1903,10 +2049,229 @@ export function AdminPanel({ onShowToast }: AdminPanelProps) {
               </motion.div>
             )}
             </AnimatePresence>
+
+            {/* Modal 2: Edit User Modal */}
+            <AnimatePresence>
+            {editUserModal.open && editUserModal.user && (
+              <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <motion.div initial={{scale:0.95, y:20}} animate={{scale:1, y:0}} exit={{scale:0.95, y:20}} className="bg-slate-900 border border-white/20 rounded-3xl p-6 sm:p-8 max-w-md w-full space-y-6 shadow-2xl">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Edit3 className="w-5 h-5 text-purple-400" />
+                    Edit User: {editUserModal.user.name}
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Full Name</label>
+                      <input
+                        type="text"
+                        value={userName}
+                        onChange={(e) => setUserName(e.target.value)}
+                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Username</label>
+                      <input
+                        type="text"
+                        value={userUsername}
+                        onChange={(e) => setUserUsername(e.target.value)}
+                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Email Address</label>
+                      <input
+                        type="email"
+                        value={userEmail}
+                        onChange={(e) => setUserEmail(e.target.value)}
+                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Role</label>
+                        <select
+                          value={userRoleSelect}
+                          onChange={(e) => setUserRoleSelect(e.target.value)}
+                          className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-3 text-xs text-white focus:outline-none focus:border-purple-500"
+                        >
+                          <option value="Standard User">Standard User</option>
+                          <option value="Administrator">Administrator</option>
+                          <option value="Staff Support">Staff Support</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Status</label>
+                        <select
+                          value={userStatusSelect}
+                          onChange={(e) => setUserStatusSelect(e.target.value as any)}
+                          className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-3 text-xs text-white focus:outline-none focus:border-purple-500"
+                        >
+                          <option value="active">Active</option>
+                          <option value="suspended">Suspended</option>
+                          <option value="banned">Banned</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+                    <button onClick={() => setEditUserModal({ open: false, user: null })} className="px-4 py-2.5 rounded-xl text-xs bg-white/10 text-slate-300">Cancel</button>
+                    <button
+                      onClick={async () => {
+                        if (!userName.trim() || !userEmail.trim()) return;
+                        const finalRole = userRoleSelect === 'Administrator' ? 'Admin' : 'User';
+                        await updateUser(editUserModal.user!.id, {
+                          name: userName.trim(),
+                          username: userUsername.trim().toLowerCase(),
+                          email: userEmail.trim().toLowerCase(),
+                          role: finalRole,
+                          roles: [userRoleSelect],
+                          status: userStatusSelect
+                        });
+                        onShowToast('User details updated successfully!', 'success');
+                        setEditUserModal({ open: false, user: null });
+                      }}
+                      className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-500 shadow-lg shadow-purple-600/30"
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+            </AnimatePresence>
+
+            {/* Modal 3: View User Details Modal */}
+            <AnimatePresence>
+            {userDetailsModal.open && userDetailsModal.user && (
+              <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <motion.div initial={{scale:0.95, y:20}} animate={{scale:1, y:0}} exit={{scale:0.95, y:20}} className="bg-slate-900 border border-white/20 rounded-3xl p-6 sm:p-8 max-w-md w-full space-y-6 shadow-2xl">
+                  <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <User className="w-5 h-5 text-purple-400" />
+                      User Profile Details
+                    </h3>
+                    <button 
+                      onClick={() => setUserDetailsModal({ open: false, user: null })}
+                      className="text-slate-400 hover:text-white text-sm"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-3 text-xs">
+                    <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white text-lg font-bold">
+                        {userDetailsModal.user.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="font-bold text-white text-sm">{userDetailsModal.user.name}</div>
+                        <div className="text-purple-400 font-mono">@{userDetailsModal.user.username || 'client'}</div>
+                        <div className="text-slate-400">{userDetailsModal.user.email}</div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-2">
+                      <div className="p-3 rounded-xl bg-slate-950 border border-white/5">
+                        <span className="text-slate-400 block text-[10px] uppercase">Account ID</span>
+                        <span className="font-mono text-white text-[11px] truncate block">{userDetailsModal.user.id}</span>
+                      </div>
+                      <div className="p-3 rounded-xl bg-slate-950 border border-white/5">
+                        <span className="text-slate-400 block text-[10px] uppercase">Role</span>
+                        <span className="font-semibold text-purple-300">{userDetailsModal.user.role || 'User'}</span>
+                      </div>
+                      <div className="p-3 rounded-xl bg-slate-950 border border-white/5">
+                        <span className="text-slate-400 block text-[10px] uppercase">Account Status</span>
+                        <span className="font-semibold capitalize text-emerald-400">{userDetailsModal.user.status || 'Active'}</span>
+                      </div>
+                      <div className="p-3 rounded-xl bg-slate-950 border border-white/5">
+                        <span className="text-slate-400 block text-[10px] uppercase">Registration Date</span>
+                        <span className="text-white">{userDetailsModal.user.joinedDate || 'Recent'}</span>
+                      </div>
+                      <div className="p-3 rounded-xl bg-slate-950 border border-white/5">
+                        <span className="text-slate-400 block text-[10px] uppercase">Active Servers</span>
+                        <span className="text-white font-bold">{userDetailsModal.user.serversCount || 0}</span>
+                      </div>
+                      <div className="p-3 rounded-xl bg-slate-950 border border-white/5">
+                        <span className="text-slate-400 block text-[10px] uppercase">Security Level</span>
+                        <span className="text-emerald-400 font-mono text-[10px]">PBKDF2 SHA-256</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-3 border-t border-white/10">
+                    <button
+                      onClick={() => setUserDetailsModal({ open: false, user: null })}
+                      className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-xs font-bold text-white"
+                    >
+                      Close Details
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+            </AnimatePresence>
+
+            {/* Modal 4: Reset Password Modal */}
+            <AnimatePresence>
+            {resetPassModal.open && resetPassModal.user && (
+              <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <motion.div initial={{scale:0.95, y:20}} animate={{scale:1, y:0}} exit={{scale:0.95, y:20}} className="bg-slate-900 border border-white/20 rounded-3xl p-6 sm:p-8 max-w-md w-full space-y-5 shadow-2xl">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Key className="w-5 h-5 text-blue-400" />
+                    Reset Password: {resetPassModal.user.name}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Enter a new secure password for <span className="text-white font-semibold">{resetPassModal.user.email}</span>. The password will be hashed using 100,000 PBKDF2 iterations with salt.
+                  </p>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">New Password</label>
+                    <input
+                      type="password"
+                      value={newPassInput}
+                      onChange={(e) => setNewPassInput(e.target.value)}
+                      placeholder="Minimum 6 characters"
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-3 border-t border-white/10">
+                    <button onClick={() => setResetPassModal({ open: false, user: null })} className="px-4 py-2.5 rounded-xl text-xs bg-white/10 text-slate-300">Cancel</button>
+                    <button
+                      onClick={async () => {
+                        if (!newPassInput || newPassInput.length < 6) {
+                          onShowToast('Password must be at least 6 characters long', 'error');
+                          return;
+                        }
+                        const ok = await resetUserPassword(resetPassModal.user!.id, newPassInput);
+                        if (ok) {
+                          onShowToast(`Password for ${resetPassModal.user!.name} reset successfully!`, 'success');
+                          setResetPassModal({ open: false, user: null });
+                        } else {
+                          onShowToast('Failed to reset password', 'error');
+                        }
+                      }}
+                      className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-600/30"
+                    >
+                      Update Password
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+            </AnimatePresence>
           </div>
         )}
 
         {/* 5. ROLE & PERMISSION MANAGEMENT (RBAC) */}
+        {activeTab === 'coupons' && (
+          <AdminCouponManagementTab 
+            coupons={coupons} 
+            onRefresh={() => getStoredCoupons().then(setCoupons)} 
+            onShowToast={onShowToast} 
+          />
+        )}
         {activeTab === 'orders' && (
           <AdminOrderManagementTab orders={orders} onUpdate={updateStoredOrders} onShowToast={onShowToast} />
         )}

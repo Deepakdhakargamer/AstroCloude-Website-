@@ -1,4 +1,4 @@
-export type ViewMode = 'public' | 'dashboard' | 'admin' | 'categoryPlans' | 'checkout';
+export type ViewMode = 'public' | 'dashboard' | 'admin' | 'categoryPlans' | 'checkout' | 'login' | 'register';
 
 export interface HostingService {
   id: string;
@@ -171,13 +171,33 @@ export interface AdminAnnouncement {
   active: boolean;
 }
 
+export type CouponDiscountType = 'percentage' | 'fixed';
+
+export interface CouponUsageRecord {
+  orderId: string;
+  userId: string;
+  userEmail?: string;
+  discountApplied: number;
+  usedAt: string;
+}
+
 export interface AdminCoupon {
   id: string;
   code: string;
-  discountPercent: number;
-  expiryDate: string;
-  usesCount: number;
+  description?: string;
+  discountType: CouponDiscountType;
+  discountValue: number;
+  minOrderAmount?: number;
+  maxDiscountAmount?: number; // Cap for percentage discounts
+  usageLimit?: number; // Total usages across all users
+  perUserLimit?: number; // Max times a single user can use it (default 1)
+  startDate?: string;
+  expiryDate?: string;
   active: boolean;
+  usesCount: number;
+  usedBy?: CouponUsageRecord[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface PaymentGateway {
@@ -286,6 +306,8 @@ export interface AdminHostingPlan {
   seoTitle?: string;
   seoDescription?: string;
   price: number;
+  currency?: string;
+  billingCycle?: string;
   status: 'active' | 'hidden' | 'draft';
   order: number;
 }
@@ -293,6 +315,7 @@ export interface AdminHostingPlan {
 export interface AdminUser {
   id: string;
   name: string;
+  username: string;
   email: string;
   role?: 'Admin' | 'Staff' | 'Support' | 'User';
   roles: string[];
@@ -300,6 +323,9 @@ export interface AdminUser {
   joinedDate: string;
   serversCount: number;
   password?: string;
+  passwordHash?: string;
+  salt?: string;
+  lastLogin?: string;
 }
 
 export interface AdminTicketMessage {
@@ -364,6 +390,11 @@ export interface AdminOrder {
   categoryId: string;
   categoryName: string;
   price: number;
+  currency?: string;
+  originalPrice?: number;
+  discountAmount?: number;
+  couponCode?: string;
+  totalAmount?: number;
   screenshotUrl: string;
   transactionId?: string;
   status: 'pending_verification' | 'approved' | 'rejected';

@@ -6,6 +6,7 @@ import {
   Sparkles, LayoutList, Layers, Eye, Copy, RefreshCw, GripVertical, Settings, AlignLeft
 , ChevronDown} from "lucide-react";
 import { AdminHostingPlan, AdminCategory } from '../types';
+import { formatINR } from '../utils/currency';
 
 interface AdminPlanEditorProps {
   plan?: AdminHostingPlan;
@@ -278,7 +279,7 @@ export function AdminPlanEditor({ plan, categories, onSave, onAutoSave, onClose,
                           </span>
                         )}
                         <span className="text-xs font-mono text-emerald-400 font-semibold bg-emerald-950/40 border border-emerald-500/30 px-2.5 py-1 rounded-lg">
-                          ${price}/mo
+                          {formatINR(parseFloat(price) || 0)}/mo
                         </span>
                       </div>
                       <h3 className="text-2xl font-black text-white mb-2">{name || 'Plan Title'}</h3>
@@ -375,12 +376,12 @@ export function AdminPlanEditor({ plan, categories, onSave, onAutoSave, onClose,
                         </div>
 
                         <div>
-                          <label className="block text-xs font-semibold text-slate-300 mb-2">Monthly Price ($)</label>
+                          <label className="block text-xs font-semibold text-slate-300 mb-2">Monthly Price (INR - ₹)</label>
                           <div className="relative">
-                            <span className="absolute left-4 top-3 text-slate-400 font-semibold">$</span>
+                            <span className="absolute left-4 top-3 text-slate-400 font-semibold">₹</span>
                             <input
                               type="number"
-                              step="0.01"
+                              step="1"
                               value={price}
                               onChange={(e) => setPrice(e.target.value)}
                               className="w-full bg-slate-900 border border-white/10 rounded-xl pl-8 pr-4 py-3 text-sm font-mono text-white focus:outline-none focus:border-purple-500/50 transition-all"

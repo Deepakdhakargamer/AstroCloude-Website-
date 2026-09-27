@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Filter, CheckCircle2, XCircle, Clock, Eye, Download, MessageSquare, AlertCircle, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Filter, CheckCircle2, XCircle, Clock, Eye, Download, MessageSquare, AlertCircle, Trash2, ChevronLeft, ChevronRight, Tag } from 'lucide-react';
 import { AdminOrder } from '../types';
+import { formatINR } from '../utils/currency';
 
 interface Props {
   orders: AdminOrder[];
@@ -121,68 +122,119 @@ export function AdminOrderManagementTab({ orders, onUpdate, onShowToast }: Props
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-white/5 border-b border-white/10 text-xs uppercase tracking-wider text-slate-400">
-                <th className="p-4 font-medium">Order details</th>
-                <th className="p-4 font-medium">Customer</th>
+                <th className="p-4 font-medium">User</th>
                 <th className="p-4 font-medium">Plan</th>
-                <th className="p-4 font-medium">Date</th>
+                <th className="p-4 font-medium">Original Price</th>
+                <th className="p-4 font-medium">Coupon Code</th>
+                <th className="p-4 font-medium">Discount</th>
+                <th className="p-4 font-medium">Final Price</th>
+                <th className="p-4 font-medium">Order Status</th>
                 <th className="p-4 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-sm">
               {paginatedOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-slate-500">
+                  <td colSpan={8} className="p-8 text-center text-slate-500">
                     No orders found matching your filters.
                   </td>
                 </tr>
               ) : (
-                paginatedOrders.map(order => (
-                  <tr key={order.id} className="hover:bg-white/[0.02] transition-colors group">
-                    <td className="p-4">
-                      <div className="font-mono text-xs text-slate-300 mb-1">{order.id}</div>
-                      {getStatusBadge(order.status)}
-                    </td>
-                    <td className="p-4">
-                      <div className="font-medium text-white">{order.userName}</div>
-                      <div className="text-slate-400 text-xs">{order.userEmail}</div>
-                    </td>
-                    <td className="p-4">
-                      <div className="text-white">{order.planName}</div>
-                      <div className="text-slate-400 text-xs capitalize">{order.categoryName}</div>
-                    </td>
-                    <td className="p-4">
-                      <div className="text-slate-300">{new Date(order.createdAt).toLocaleDateString()}</div>
-                      <div className="text-slate-500 text-xs">{new Date(order.createdAt).toLocaleTimeString()}</div>
-                    </td>
-                    <td className="p-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => { setSelectedOrder(order); setRejectionReason(order.rejectionReason || ''); setAdminNote(order.adminNote || ''); }}
-                          className="p-2 bg-slate-800 text-cyan-400 rounded-lg hover:bg-slate-700 transition-colors"
-                          title="View Order"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {order.status === 'pending_verification' && (
-                          <button
-                            onClick={() => handleStatusChange(order.id, 'approved')}
-                            className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg hover:bg-emerald-500/20 transition-colors"
-                            title="Approve"
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                          </button>
+                paginatedOrders.map(order => {
+                  const originalPrice = order.originalPrice || order.price;
+                  const hasDiscount = Boolean(order.discountAmount && order.discountAmount > 0);
+
+                  return (
+                    <tr key={order.id} className="hover:bg-white/[0.02] transition-colors group">
+                      {/* User */}
+                      <td className="p-4">
+                        <div className="font-medium text-white">{order.userName}</div>
+                        <div className="text-slate-400 text-xs">{order.userEmail}</div>
+                        <div className="text-[10px] font-mono text-purple-400 mt-1 inline-flex items-center gap-1 bg-purple-950/40 px-1.5 py-0.5 rounded border border-purple-500/20">
+                          <span>UID:</span>
+                          <span className="truncate max-w-[130px]">{order.userId || 'Unknown'}</span>
+                        </div>
+                      </td>
+
+                      {/* Plan */}
+                      <td className="p-4">
+                        <div className="text-white font-medium">{order.planName}</div>
+                        <div className="text-xs text-slate-400 capitalize">{order.categoryName}</div>
+                        <div className="text-[10px] text-slate-500 font-mono mt-0.5">{order.id}</div>
+                      </td>
+
+                      {/* Original Price */}
+                      <td className="p-4 text-xs font-mono font-medium text-slate-300">
+                        {formatINR(originalPrice)}
+                      </td>
+
+                      {/* Coupon Code */}
+                      <td className="p-4 text-xs">
+                        {order.couponCode ? (
+                          <span className="inline-flex items-center gap-1 font-mono font-bold text-xs text-purple-300 bg-purple-950/60 px-2.5 py-1 rounded-lg border border-purple-500/30">
+                            <Tag className="w-3 h-3 text-purple-400" />
+                            {order.couponCode}
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 font-mono">—</span>
                         )}
-                        <button
-                          onClick={() => handleDelete(order.id)}
-                          className="p-2 bg-rose-500/10 text-rose-400 rounded-lg hover:bg-rose-500/20 transition-colors"
-                          title="Delete Order"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+
+                      {/* Discount */}
+                      <td className="p-4 text-xs font-mono">
+                        {hasDiscount ? (
+                          <span className="font-semibold text-emerald-400">
+                            -{formatINR(order.discountAmount!)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 font-mono">—</span>
+                        )}
+                      </td>
+
+                      {/* Final Price */}
+                      <td className="p-4 font-mono font-bold text-emerald-400">
+                        {formatINR(order.price)}
+                      </td>
+
+                      {/* Order Status */}
+                      <td className="p-4">
+                        {getStatusBadge(order.status)}
+                        <div className="text-[10px] text-slate-500 mt-1">
+                          {new Date(order.createdAt).toLocaleDateString()}
+                        </div>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="p-4 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => { setSelectedOrder(order); setRejectionReason(order.rejectionReason || ''); setAdminNote(order.adminNote || ''); }}
+                            className="p-2 bg-slate-800 text-cyan-400 rounded-lg hover:bg-slate-700 transition-colors"
+                            title="View Order"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          {order.status === 'pending_verification' && (
+                            <button
+                              onClick={() => handleStatusChange(order.id, 'approved')}
+                              className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg hover:bg-emerald-500/20 transition-colors"
+                              title="Approve"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDelete(order.id)}
+                            className="p-2 bg-rose-500/10 text-rose-400 rounded-lg hover:bg-rose-500/20 transition-colors"
+                            title="Delete Order"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -252,10 +304,22 @@ export function AdminOrderManagementTab({ orders, onUpdate, onShowToast }: Props
                     <div className="bg-slate-950/50 p-4 rounded-xl border border-white/5 space-y-2 text-sm">
                       <div className="flex justify-between"><span className="text-slate-400">Plan</span><span className="text-white font-medium">{selectedOrder.planName}</span></div>
                       <div className="flex justify-between"><span className="text-slate-400">Category</span><span className="text-white font-medium capitalize">{selectedOrder.categoryName}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-400">Price</span><span className="text-emerald-400 font-medium">₹{selectedOrder.price}</span></div>
+                      {Boolean(selectedOrder.originalPrice && selectedOrder.originalPrice !== selectedOrder.price) && (
+                        <div className="flex justify-between text-xs text-slate-400">
+                          <span>Original Price</span>
+                          <span className="line-through">{formatINR(selectedOrder.originalPrice)}</span>
+                        </div>
+                      )}
+                      {Boolean(selectedOrder.discountAmount && selectedOrder.discountAmount > 0) && (
+                        <div className="flex justify-between text-xs text-emerald-400">
+                          <span>Discount {selectedOrder.couponCode ? `(${selectedOrder.couponCode})` : ''}</span>
+                          <span>-{formatINR(selectedOrder.discountAmount)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between"><span className="text-slate-400">Total Price (INR)</span><span className="text-emerald-400 font-bold font-mono">{formatINR(selectedOrder.price)}</span></div>
                       {selectedOrder.transactionId && (
                         <div className="flex justify-between pt-2 border-t border-white/5 mt-2">
-                          <span className="text-slate-400">User Note</span>
+                          <span className="text-slate-400">User Note / Transaction</span>
                           <span className="text-white font-mono text-xs">{selectedOrder.transactionId}</span>
                         </div>
                       )}

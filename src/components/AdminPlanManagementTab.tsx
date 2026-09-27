@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, Filter, Plus, Server, CheckSquare, Square, Check, X, Copy, Trash2, Edit2, CheckCircle2, ChevronDown } from 'lucide-react';
 import { AdminHostingPlan, AdminCategory } from '../types';
 import { updateStoredPlans } from '../utils/planSync';
+import { formatINR } from '../utils/currency';
 
 interface AdminPlanManagementTabProps {
   plans: AdminHostingPlan[];
@@ -279,7 +280,7 @@ export function AdminPlanManagementTab({
                       </span>
                     </td>
                     <td className="p-4">
-                      <div className="font-medium text-white">₹{plan.price}<span className="text-slate-500 text-xs">/{plan.billingCycle}</span></div>
+                      <div className="font-medium text-white">{formatINR(plan.price)}<span className="text-slate-500 text-xs">/{plan.billingCycle || 'mo'}</span></div>
                     </td>
                     <td className="p-4">
                       {plan.status === 'active' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-500/10 text-green-400 border border-green-500/20 rounded-lg text-xs font-bold"><div className="w-1.5 h-1.5 rounded-full bg-green-400"></div> Active</span>}

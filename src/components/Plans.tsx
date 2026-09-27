@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { AdminHostingPlan, AdminCategory } from '../types';
 import { getStoredCategories } from '../utils/categorySync';
 import { getStoredPlans } from '../utils/planSync';
+import { formatINR } from '../utils/currency';
 
 interface PlansProps {
   onRequestPlan: (plan: AdminHostingPlan) => void;
@@ -142,7 +143,7 @@ export function Plans({ onRequestPlan }: PlansProps) {
                     )}
                     
                     <span className="text-xs font-mono text-emerald-400 font-semibold bg-emerald-950/40 border border-emerald-500/30 px-2.5 py-1 rounded-lg">
-                      ${plan.price}/mo
+                      {formatINR(plan.price)}/mo
                     </span>
                   </div>
                   

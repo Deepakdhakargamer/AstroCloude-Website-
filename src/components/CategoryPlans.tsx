@@ -4,6 +4,7 @@ import { ArrowLeft, Cpu, Server, HardDrive, Globe, CheckCircle2, ShoppingCart, Z
 import { AdminCategory, AdminHostingPlan } from '../types';
 import { getStoredCategories } from '../utils/categorySync';
 import { getStoredPlans } from '../utils/planSync';
+import { formatINR } from '../utils/currency';
 
 interface CategoryPlansProps {
   categoryId: string;
@@ -146,7 +147,7 @@ export function CategoryPlans({ categoryId, onBack, onRequestPlan }: CategoryPla
 
                     <div className="mb-6 pb-6 border-b border-white/10 flex-1">
                       <div className="flex items-end gap-1 mb-4">
-                        <span className="text-4xl font-black text-white">${plan.price}</span>
+                        <span className="text-4xl font-black text-white">{formatINR(plan.price)}</span>
                         <span className="text-slate-400 text-sm mb-1.5">/mo</span>
                       </div>
                       
