@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { AdminStaff, AdminRole } from '../types';
 import { Upload, X, Save, ArrowLeft, Image as ImageIcon, Github, Twitter, Youtube, Instagram, Globe, MessageSquare, ShieldAlert , ChevronDown} from "lucide-react";
+import { compressImageFile } from '../utils/imageCompress';
 
 interface AdminStaffEditorProps {
   staff?: AdminStaff;
@@ -34,25 +35,37 @@ export function AdminStaffEditor({ staff, roles = [], onSave, onCancel }: AdminS
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
 
-  const handleBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBgUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData({ ...formData, backgroundImage: reader.result as string });
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file, 800, 800, 0.82);
+        setFormData(prev => ({ ...prev, backgroundImage: compressed }));
+      } catch {
+        // Fallback
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setFormData(prev => ({ ...prev, backgroundImage: reader.result as string }));
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData({ ...formData, profileImage: reader.result as string });
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file, 400, 400, 0.82);
+        setFormData(prev => ({ ...prev, profileImage: compressed }));
+      } catch {
+        // Fallback
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setFormData(prev => ({ ...prev, profileImage: reader.result as string }));
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 

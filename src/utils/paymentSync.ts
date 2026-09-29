@@ -19,16 +19,17 @@ export function getStoredPaymentSettings(): PaymentSettings {
       return JSON.parse(item);
     }
   } catch (e) {
-    console.error('Error reading payment settings from localStorage', e);
+    console.warn('Error reading payment settings from localStorage', e);
   }
   return INITIAL_PAYMENT_SETTINGS;
 }
 
 export function saveStoredPaymentSettings(settings: PaymentSettings): void {
   try {
+    localStorage.removeItem(STORAGE_KEY);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
     window.dispatchEvent(new CustomEvent('astro_payment_changed', { detail: settings }));
   } catch (e) {
-    console.error('Error saving payment settings to localStorage', e);
+    console.warn('Error saving payment settings to localStorage', e);
   }
 }

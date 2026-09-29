@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Send, Sparkles, ShieldCheck } from 'lucide-react';
 import { AdminHostingPlan } from '../types';
+import { getPlanSpecs } from '../utils/specFormat';
 import confetti from 'canvas-confetti';
 
 interface RequestPlanModalProps {
@@ -72,12 +73,17 @@ export function RequestPlanModal({ plan, isOpen, onClose, onSubmit }: RequestPla
             <span className="px-2.5 py-0.5 rounded-full text-xs bg-purple-500/20 text-purple-300 font-medium">Free Request</span>
           </div>
           <h4 className="text-lg font-bold text-white mb-2">{plan.name}</h4>
-          <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
-            <div>⚡ CPU: <span className="text-white font-medium">{plan.cpu}</span></div>
-            <div>🧠 RAM: <span className="text-white font-medium">{plan.ram}</span></div>
-            <div>💾 Storage: <span className="text-white font-medium">{plan.storage}</span></div>
-            <div>🛡️ DDoS: <span className="text-white font-medium">{plan.ddos}</span></div>
-          </div>
+          {(() => {
+            const specs = getPlanSpecs(plan);
+            return (
+              <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+                <div>⚡ CPU: <span className="text-white font-medium">{specs.cpu}</span></div>
+                <div>🧠 RAM: <span className="text-white font-medium">{specs.ram}</span></div>
+                <div>💾 Storage: <span className="text-white font-medium">{specs.disk}</span></div>
+                <div>🛡️ DDoS: <span className="text-white font-medium">{specs.ddos || 'Cosmic Guard'}</span></div>
+              </div>
+            );
+          })()}
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

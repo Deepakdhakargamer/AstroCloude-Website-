@@ -295,6 +295,7 @@ export interface AdminHostingPlan {
   cpu: string;
   ram: string;
   storage: string;
+  disk?: string;
   bandwidth: string;
   network?: string;
   ddos?: string;

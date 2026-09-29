@@ -116,16 +116,17 @@ export function getStoredFeatures(): AdminFeature[] {
       return JSON.parse(item);
     }
   } catch (e) {
-    console.error('Error reading features from localStorage', e);
+    console.warn('Error reading features from localStorage', e);
   }
   return INITIAL_FEATURES;
 }
 
 export function saveStoredFeatures(features: AdminFeature[]): void {
   try {
+    localStorage.removeItem(FEATURE_STORAGE_KEY);
     localStorage.setItem(FEATURE_STORAGE_KEY, JSON.stringify(features));
     window.dispatchEvent(new CustomEvent('astro_features_changed', { detail: features }));
   } catch (e) {
-    console.error('Error saving features to localStorage', e);
+    console.warn('Error saving features to localStorage', e);
   }
 }

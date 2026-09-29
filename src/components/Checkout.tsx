@@ -3,14 +3,18 @@ import { motion } from 'motion/react';
 import { 
   Upload, Image as ImageIcon, FileText, ArrowLeft, CreditCard, ShieldCheck, 
   Server, Cpu, Database, HardDrive, Wifi, Lock, QrCode, Smartphone, Copy, 
-  CheckCircle2, LogIn, AlertCircle, Sparkles, UserCheck, Tag, X
+  CheckCircle2, LogIn, AlertCircle, Sparkles, UserCheck, Tag, X, ChevronDown, Layers,
+  Shield, Zap
 } from 'lucide-react';
 import { AdminHostingPlan, AdminUser, AdminCoupon } from '../types';
 import { getStoredPaymentSettings } from '../utils/paymentSync';
 import { addOrder } from '../utils/orderSync';
 import { getCurrentSession } from '../utils/userSync';
+import { getStoredPlans } from '../utils/planSync';
+import { getPlanSpecs } from '../utils/specFormat';
 import { formatINR, formatINRNumber } from '../utils/currency';
 import { validateCoupon } from '../utils/couponSync';
+import { compressImageFile } from '../utils/imageCompress';
 
 interface CheckoutProps {
   plan: AdminHostingPlan | null;
@@ -25,6 +29,57 @@ export function Checkout({ plan, onBack, onShowToast, currentUser, onRequireAuth
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentSettings, setPaymentSettings] = useState(() => getStoredPaymentSettings());
   
+  // Available plans and active plan state to support dynamic updates and plan switching
+  const [availablePlans, setAvailablePlans] = useState<AdminHostingPlan[]>(() => getStoredPlans());
+  const [activePlan, setActivePlan] = useState<AdminHostingPlan | null>(() => {
+    if (plan) {
+      const fresh = getStoredPlans().find(p => p.id === plan.id);
+      return fresh || plan;
+    }
+    const stored = getStoredPlans();
+    return stored.length > 0 ? stored[0] : null;
+  });
+
+  useEffect(() => {
+    if (plan) {
+      const fresh = getStoredPlans().find(p => p.id === plan.id);
+      setActivePlan(fresh || plan);
+    }
+  }, [plan]);
+
+  useEffect(() => {
+    const handlePlansChange = (e: any) => {
+      const freshList: AdminHostingPlan[] = e.detail || getStoredPlans();
+      setAvailablePlans(freshList);
+      if (activePlan) {
+        const updated = freshList.find(p => p.id === activePlan.id);
+        if (updated) {
+          setActivePlan(updated);
+        }
+      }
+    };
+    window.addEventListener('astro_plans_changed', handlePlansChange);
+    return () => window.removeEventListener('astro_plans_changed', handlePlansChange);
+  }, [activePlan?.id]);
+
+  const handleSelectPlan = (planId: string) => {
+    const selected = availablePlans.find(p => p.id === planId);
+    if (selected) {
+      setActivePlan(selected);
+      if (appliedCoupon) {
+        setAppliedCoupon(null);
+        setCouponCode('');
+        setCouponError(null);
+        onShowToast(`Plan changed to ${selected.name}. Please re-apply coupon if eligible.`, 'info');
+      } else {
+        onShowToast(`Selected plan: ${selected.name}`, 'info');
+      }
+    }
+  };
+
+  const currentPlan = activePlan || plan;
+  const specs = getPlanSpecs(currentPlan);
+
   const [firstName, setFirstName] = useState(() => {
     if (currentUser?.name) {
       const parts = currentUser.name.split(' ');
@@ -55,7 +110,7 @@ export function Checkout({ plan, onBack, onShowToast, currentUser, onRequireAuth
   const [couponError, setCouponError] = useState<string | null>(null);
   const [couponChecking, setCouponChecking] = useState(false);
 
-  const basePrice = parseFloat(plan?.price?.toString() || '0');
+  const basePrice = parseFloat(currentPlan?.price?.toString() || '0');
   const discountAmount = appliedCoupon ? appliedCoupon.discountAmount : 0;
   const finalPrice = appliedCoupon ? appliedCoupon.finalPrice : basePrice;
 
@@ -165,7 +220,7 @@ export function Checkout({ plan, onBack, onShowToast, currentUser, onRequireAuth
     );
   }
 
-  if (!plan) {
+  if (!currentPlan) {
     return (
       <div className="min-h-screen pt-24 pb-12 flex flex-col items-center justify-center text-center px-4 bg-slate-950">
         <h2 className="text-2xl font-bold text-white mb-4">No plan selected</h2>
@@ -184,17 +239,23 @@ export function Checkout({ plan, onBack, onShowToast, currentUser, onRequireAuth
         onShowToast('Invalid file type. Please upload JPG, PNG, WEBP, or PDF.', 'error');
         return;
       }
-      if (file.size > 5 * 1024 * 1024) {
-         onShowToast('File too large. Max 5MB.', 'error');
+      if (file.size > 10 * 1024 * 1024) {
+         onShowToast('File too large. Max 10MB.', 'error');
          return;
       }
       setScreenshot(file);
       
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setScreenshotBase64(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      compressImageFile(file, 1000, 1000, 0.82)
+        .then(compressed => {
+          setScreenshotBase64(compressed);
+        })
+        .catch(() => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setScreenshotBase64(reader.result as string);
+          };
+          reader.readAsDataURL(file);
+        });
     }
   };
 
@@ -218,10 +279,10 @@ export function Checkout({ plan, onBack, onShowToast, currentUser, onRequireAuth
 
     try {
       await addOrder({
-        planId: plan.id,
-        planName: plan.name,
-        categoryId: plan.categoryId,
-        categoryName: plan.categoryId,
+        planId: currentPlan.id,
+        planName: currentPlan.name,
+        categoryId: currentPlan.categoryId,
+        categoryName: currentPlan.categoryId,
         price: finalPrice,
         currency: 'INR',
         originalPrice: basePrice,
@@ -263,8 +324,154 @@ export function Checkout({ plan, onBack, onShowToast, currentUser, onRequireAuth
         </button>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
-          {/* Checkout Form */}
-          <div className="lg:col-span-7 space-y-8">
+          {/* Checkout Left Column */}
+          <div className="lg:col-span-7 space-y-6">
+            {/* Selected Plan Hardware Specifications Embed */}
+            <div className="bg-slate-900/80 border border-purple-500/30 rounded-3xl p-6 sm:p-8 backdrop-blur-xl relative overflow-hidden shadow-2xl">
+              <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-br from-purple-600/15 via-indigo-600/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+
+              <div className="relative z-10">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <span className="text-[10px] uppercase font-bold tracking-widest px-2.5 py-0.5 rounded-full bg-purple-950 border border-purple-500/40 text-purple-300">
+                        {currentPlan.categoryId ? `${currentPlan.categoryId} Server` : 'Hosting Plan'}
+                      </span>
+                      {currentPlan.badge && (
+                        <span className="text-[10px] uppercase font-bold tracking-widest px-2.5 py-0.5 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-sm">
+                          {currentPlan.badge}
+                        </span>
+                      )}
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        Selected Plan
+                      </span>
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">{currentPlan.name}</h2>
+                    {currentPlan.description && (
+                      <p className="text-xs text-slate-400 mt-1 max-w-xl leading-relaxed">
+                        {currentPlan.description}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Plan Switcher Dropdown */}
+                  {availablePlans.length > 1 && (
+                    <div className="shrink-0 sm:self-start">
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                        Switch Plan
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={currentPlan.id}
+                          onChange={(e) => handleSelectPlan(e.target.value)}
+                          className="appearance-none bg-slate-950/80 border border-white/10 hover:border-purple-500/50 rounded-xl px-3.5 py-2 pr-9 text-xs font-semibold text-white focus:outline-none focus:border-purple-500 transition-colors cursor-pointer shadow-sm"
+                        >
+                          {availablePlans.map((p) => (
+                            <option key={p.id} value={p.id} className="bg-slate-900 text-white">
+                              {p.name} — {formatINR(p.price)}/mo
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Hardware Metric Cards: CPU, RAM, Disk, Price */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                  <div className="p-3.5 rounded-2xl bg-purple-950/30 border border-purple-500/30 flex flex-col justify-between">
+                    <div className="flex items-center gap-1.5 text-purple-400 text-xs font-bold uppercase mb-1">
+                      <Cpu className="w-4 h-4 shrink-0" />
+                      <span>CPU</span>
+                    </div>
+                    <div className="text-sm sm:text-base font-black text-white truncate" title={specs.cpu}>
+                      {specs.cpu}
+                    </div>
+                    <span className="text-[10px] text-slate-400 mt-1">Processor Power</span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-blue-950/30 border border-blue-500/30 flex flex-col justify-between">
+                    <div className="flex items-center gap-1.5 text-blue-400 text-xs font-bold uppercase mb-1">
+                      <Database className="w-4 h-4 shrink-0" />
+                      <span>RAM</span>
+                    </div>
+                    <div className="text-sm sm:text-base font-black text-white truncate" title={specs.ram}>
+                      {specs.ram}
+                    </div>
+                    <span className="text-[10px] text-slate-400 mt-1">Dedicated Memory</span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 flex flex-col justify-between">
+                    <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-bold uppercase mb-1">
+                      <HardDrive className="w-4 h-4 shrink-0" />
+                      <span>Disk</span>
+                    </div>
+                    <div className="text-sm sm:text-base font-black text-white truncate" title={specs.disk}>
+                      {specs.disk}
+                    </div>
+                    <span className="text-[10px] text-slate-400 mt-1">Storage / NVMe</span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 flex flex-col justify-between">
+                    <div className="flex items-center gap-1.5 text-indigo-400 text-xs font-bold uppercase mb-1">
+                      <CreditCard className="w-4 h-4 shrink-0" />
+                      <span>Price</span>
+                    </div>
+                    <div className="text-sm sm:text-base font-black text-white">
+                      {formatINR(basePrice)}<span className="text-[10px] font-normal text-slate-400">/mo</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-400 mt-1">Renews Monthly</span>
+                  </div>
+                </div>
+
+                {/* Plan Specifications List matching example layout */}
+                <div className="bg-slate-950/60 rounded-2xl border border-white/5 p-4 text-xs space-y-2.5">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                    <span>Plan Specifications &bull; {currentPlan.name}</span>
+                    <span className="text-emerald-400 font-mono text-xs">{formatINR(basePrice)}/month</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 text-slate-300">
+                    <div className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
+                      <span className="text-slate-400 font-medium">CPU:</span>
+                      <span className="text-white font-bold">{specs.cpu}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                      <span className="text-slate-400 font-medium">RAM:</span>
+                      <span className="text-white font-bold">{specs.ram}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                      <span className="text-slate-400 font-medium">Disk:</span>
+                      <span className="text-white font-bold">{specs.disk}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
+                      <span className="text-slate-400 font-medium">Price:</span>
+                      <span className="text-white font-bold">{formatINR(basePrice)}/month</span>
+                    </div>
+                    {specs.bandwidth && specs.bandwidth !== 'N/A' && (
+                      <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                        <span className="text-slate-400 font-medium">Bandwidth:</span>
+                        <span className="text-white font-bold">{specs.bandwidth}</span>
+                      </div>
+                    )}
+                    {specs.ddos && (
+                      <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
+                        <span className="text-slate-400 font-medium">Protection:</span>
+                        <span className="text-white font-bold">{specs.ddos}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Checkout Form */}
             <div className="bg-slate-900/60 border border-white/10 rounded-3xl p-6 sm:p-8 backdrop-blur-xl">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <h2 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -348,11 +555,16 @@ export function Checkout({ plan, onBack, onShowToast, currentUser, onRequireAuth
                       </h3>
                       
                       <div className="bg-slate-950/50 border border-emerald-500/30 rounded-xl p-4 sm:p-6 flex flex-col items-center justify-center space-y-6 relative overflow-hidden text-center">
-                        <div className="bg-white p-4 rounded-xl">
+                        <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-xl shadow-black/30 inline-flex items-center justify-center">
                           {paymentSettings.qrCodeUrl ? (
-                            <img src={paymentSettings.qrCodeUrl} alt="Payment QR" className="w-32 h-32 object-contain" />
+                            <img 
+                              src={paymentSettings.qrCodeUrl} 
+                              alt="Payment QR" 
+                              className="w-48 h-48 sm:w-56 sm:h-56 aspect-square object-contain" 
+                              style={{ imageRendering: 'pixelated' }}
+                            />
                           ) : (
-                            <QrCode className="w-32 h-32 text-slate-900" />
+                            <QrCode className="w-48 h-48 sm:w-56 sm:h-56 text-slate-900 aspect-square" />
                           )}
                         </div>
                         
@@ -438,9 +650,22 @@ export function Checkout({ plan, onBack, onShowToast, currentUser, onRequireAuth
                       </>
                     )}
                   </button>
-                  <p className="text-center text-xs text-slate-500 mt-4 flex items-center justify-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Secure 256-bit encrypted checkout &bull; Instant order linking
-                  </p>
+                  <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
+                    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-[11px] text-slate-400">
+                      <span className="inline-flex items-center gap-1.5 text-emerald-400 font-medium">
+                        <Lock className="w-3.5 h-3.5" /> 256-Bit SSL Encrypted
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 text-purple-400 font-medium">
+                        <Shield className="w-3.5 h-3.5" /> Verified Merchant
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 text-cyan-400 font-medium">
+                        <Zap className="w-3.5 h-3.5" /> Instant Node Linking
+                      </span>
+                    </div>
+                    <p className="text-center text-[10px] text-slate-500">
+                      Zero payment credential retention &bull; RBI &amp; NPCI guidelines compliant
+                    </p>
+                  </div>
                 </div>
               </form>
             </div>
@@ -449,16 +674,65 @@ export function Checkout({ plan, onBack, onShowToast, currentUser, onRequireAuth
           {/* Order Summary */}
           <div className="lg:col-span-5">
             <div className="bg-slate-900/60 border border-white/10 rounded-3xl p-6 sm:p-8 backdrop-blur-xl sticky top-24">
-              <h3 className="text-lg font-bold text-white mb-6">Order Summary</h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-white">Order Summary</h3>
+                <span className="text-[10px] font-mono text-purple-300 bg-purple-950/80 border border-purple-500/30 px-2 py-0.5 rounded-md uppercase font-semibold">
+                  {currentPlan.categoryId || 'HOSTING'}
+                </span>
+              </div>
               
               <div className="space-y-4 mb-6">
-                <div className="flex items-center gap-4 bg-slate-950/50 p-4 rounded-2xl border border-white/5">
-                  <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center border border-purple-500/30">
-                    <Server className="w-6 h-6 text-purple-400" />
+                <div className="bg-slate-950/60 p-4 sm:p-5 rounded-2xl border border-white/5 space-y-3.5">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-xl bg-purple-500/20 flex items-center justify-center border border-purple-500/30 shrink-0">
+                      <Server className="w-5 h-5 text-purple-400" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-white font-bold truncate">{currentPlan.name}</h4>
+                      <p className="text-xs text-slate-400 capitalize">{currentPlan.categoryId} Cloud Server</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="text-xs font-bold text-white">{formatINR(basePrice)}</span>
+                      <span className="block text-[10px] text-slate-400">/mo</span>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-white font-bold">{plan.name}</h4>
-                    <p className="text-sm text-slate-400 capitalize">{plan.categoryId} Server</p>
+
+                  {/* Highlights in Order Summary: CPU, RAM, Disk */}
+                  <div className="pt-3 border-t border-white/5 grid grid-cols-3 gap-1.5 text-center text-xs">
+                    <div className="bg-purple-950/30 border border-purple-500/20 rounded-xl p-2">
+                      <span className="block text-[9px] text-purple-400 font-bold uppercase mb-0.5">CPU</span>
+                      <span className="font-bold text-white text-[11px] truncate block" title={specs.cpu}>{specs.shortCpu}</span>
+                    </div>
+                    <div className="bg-blue-950/30 border border-blue-500/20 rounded-xl p-2">
+                      <span className="block text-[9px] text-blue-400 font-bold uppercase mb-0.5">RAM</span>
+                      <span className="font-bold text-white text-[11px] truncate block" title={specs.ram}>{specs.shortRam}</span>
+                    </div>
+                    <div className="bg-emerald-950/30 border border-emerald-500/20 rounded-xl p-2">
+                      <span className="block text-[9px] text-emerald-400 font-bold uppercase mb-0.5">Disk</span>
+                      <span className="font-bold text-white text-[11px] truncate block" title={specs.disk}>{specs.shortDisk}</span>
+                    </div>
+                  </div>
+
+                  {/* Detailed specification rows */}
+                  <div className="pt-2 text-xs space-y-1.5 text-slate-300">
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-slate-400 flex items-center gap-1.5">
+                        <Cpu className="w-3 h-3 text-purple-400" /> CPU:
+                      </span>
+                      <span className="font-bold text-white truncate max-w-[60%] text-right">{specs.cpu}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-slate-400 flex items-center gap-1.5">
+                        <Database className="w-3 h-3 text-blue-400" /> RAM:
+                      </span>
+                      <span className="font-bold text-white truncate max-w-[60%] text-right">{specs.ram}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-slate-400 flex items-center gap-1.5">
+                        <HardDrive className="w-3 h-3 text-emerald-400" /> Disk:
+                      </span>
+                      <span className="font-bold text-white truncate max-w-[60%] text-right">{specs.disk}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -583,6 +857,105 @@ export function Checkout({ plan, onBack, onShowToast, currentUser, onRequireAuth
                 <p>
                   This order will automatically appear in your <strong className="text-white">Client Dashboard &rarr; Billing & Orders</strong> once submitted.
                 </p>
+              </div>
+
+              {/* Security Badge Section */}
+              <div className="pt-5 border-t border-white/10 space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="text-xs font-bold text-white tracking-wide">Security &amp; Trust Guarantee</span>
+                  </div>
+                  <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Lock className="w-2.5 h-2.5" /> 256-Bit SSL
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2.5 rounded-xl bg-slate-950/40 border border-white/5 space-y-1 hover:border-emerald-500/20 transition-colors">
+                    <div className="flex items-center gap-1.5 text-emerald-400 font-semibold text-[11px]">
+                      <Lock className="w-3 h-3 shrink-0" />
+                      <span>End-to-End SSL</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      TLS 1.3 encryption secures every transaction byte.
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-950/40 border border-white/5 space-y-1 hover:border-purple-500/20 transition-colors">
+                    <div className="flex items-center gap-1.5 text-purple-400 font-semibold text-[11px]">
+                      <Shield className="w-3 h-3 shrink-0" />
+                      <span>Verified Billing</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      Authenticated AstroCloude merchant gateway.
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-950/40 border border-white/5 space-y-1 hover:border-cyan-500/20 transition-colors">
+                    <div className="flex items-center gap-1.5 text-cyan-400 font-semibold text-[11px]">
+                      <Zap className="w-3 h-3 shrink-0" />
+                      <span>Instant Deploy</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      Automated cloud VM setup upon order verification.
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-950/40 border border-white/5 space-y-1 hover:border-blue-500/20 transition-colors">
+                    <div className="flex items-center gap-1.5 text-blue-400 font-semibold text-[11px]">
+                      <CheckCircle2 className="w-3 h-3 shrink-0" />
+                      <span>Zero Retention</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      No banking passwords or card data stored.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Trust Seals Bar */}
+                <div className="pt-2 flex items-center justify-between text-[10px] text-slate-400 border-t border-white/5">
+                  <span className="flex items-center gap-1 text-slate-300 font-medium">
+                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                    PCI-DSS Compliant
+                  </span>
+                  <span className="flex items-center gap-1 text-slate-300 font-medium">
+                    <Sparkles className="w-3 h-3 text-purple-400" />
+                    99.9% Uptime SLA
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Dedicated Trust & Protection Card */}
+            <div className="mt-4 bg-gradient-to-br from-emerald-950/20 via-slate-900/60 to-purple-950/20 border border-emerald-500/20 rounded-3xl p-5 backdrop-blur-xl space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-white">100% Encrypted &amp; Protected Checkout</h4>
+                  <p className="text-[11px] text-slate-400">Enterprise DDoS defense &bull; Verified recipient</p>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                All transactions are routed through bank-grade TLS cryptographic channels. Your payment verification is handled directly by verified AstroCloude billing engineers with 24/7 ticket support.
+              </p>
+              <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/5">
+                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300">
+                  UPI Instant
+                </span>
+                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300">
+                  PhonePe / GPay / Paytm
+                </span>
+                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300">
+                  RuPay / Cards
+                </span>
+                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300">
+                  NetBanking
+                </span>
               </div>
             </div>
           </div>

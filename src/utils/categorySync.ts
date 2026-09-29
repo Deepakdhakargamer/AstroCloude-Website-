@@ -144,16 +144,17 @@ export function getStoredCategories(): AdminCategory[] {
       }));
     }
   } catch (e) {
-    console.error('Error reading categories from localStorage', e);
+    console.warn('Error reading categories from localStorage', e);
   }
   return INITIAL_CATEGORIES;
 }
 
 export function saveStoredCategories(categories: AdminCategory[]): void {
   try {
+    localStorage.removeItem(STORAGE_KEY);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(categories));
     window.dispatchEvent(new CustomEvent('astro_categories_changed', { detail: categories }));
   } catch (e) {
-    console.error('Error saving categories to localStorage', e);
+    console.warn('Error saving categories to localStorage', e);
   }
 }

@@ -5,6 +5,7 @@ import { AdminHostingPlan, AdminCategory } from '../types';
 import { getStoredCategories } from '../utils/categorySync';
 import { getStoredPlans } from '../utils/planSync';
 import { formatINR } from '../utils/currency';
+import { getPlanSpecs } from '../utils/specFormat';
 
 interface PlansProps {
   onRequestPlan: (plan: AdminHostingPlan) => void;
@@ -161,51 +162,83 @@ export function Plans({ onRequestPlan }: PlansProps) {
                     </div>
                   )}
 
-                  {/* Specs list */}
-                  <div className="space-y-3.5 mb-8 text-xs flex-1">
-                    {plan.cpu && (
-                      <div className="flex items-center gap-3 text-slate-200 border-b border-white/5 pb-2.5">
-                        <Cpu className="w-4 h-4 text-purple-400 shrink-0" />
-                        <span className="text-slate-400 w-24 shrink-0">CPU Spec:</span>
-                        <span className="font-semibold text-white truncate">{plan.cpu}</span>
-                      </div>
-                    )}
-                    {plan.ram && (
-                      <div className="flex items-center gap-3 text-slate-200 border-b border-white/5 pb-2.5">
-                        <Database className="w-4 h-4 text-blue-400 shrink-0" />
-                        <span className="text-slate-400 w-24 shrink-0">Memory:</span>
-                        <span className="font-semibold text-white truncate">{plan.ram}</span>
-                      </div>
-                    )}
-                    {plan.storage && (
-                      <div className="flex items-center gap-3 text-slate-200 border-b border-white/5 pb-2.5">
-                        <HardDrive className="w-4 h-4 text-indigo-400 shrink-0" />
-                        <span className="text-slate-400 w-24 shrink-0">Storage:</span>
-                        <span className="font-semibold text-white truncate">{plan.storage}</span>
-                      </div>
-                    )}
-                    {plan.bandwidth && (
-                      <div className="flex items-center gap-3 text-slate-200 border-b border-white/5 pb-2.5">
-                        <Wifi className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span className="text-slate-400 w-24 shrink-0">Bandwidth:</span>
-                        <span className="font-semibold text-white truncate">{plan.bandwidth}</span>
-                      </div>
-                    )}
-                    {plan.network && (
-                      <div className="flex items-center gap-3 text-slate-200 border-b border-white/5 pb-2.5">
-                        <Wifi className="w-4 h-4 text-cyan-400 shrink-0" />
-                        <span className="text-slate-400 w-24 shrink-0">Network:</span>
-                        <span className="font-semibold text-white truncate">{plan.network}</span>
-                      </div>
-                    )}
-                    {plan.ddos && (
-                      <div className="flex items-center gap-3 text-slate-200 border-b border-white/5 pb-2.5">
-                        <Shield className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span className="text-slate-400 w-24 shrink-0">DDoS Defense:</span>
-                        <span className="font-semibold text-white truncate">{plan.ddos}</span>
-                      </div>
-                    )}
-                  </div>
+                  {(() => {
+                    const specs = getPlanSpecs(plan);
+                    return (
+                      <>
+                        {/* Highlighted Hardware Specs: CPU, RAM, Disk */}
+                        <div className="grid grid-cols-3 gap-2 p-2.5 rounded-2xl bg-slate-950/60 border border-white/5 mb-6 text-center">
+                          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-purple-950/20 border border-purple-500/20">
+                            <div className="flex items-center gap-1 text-[10px] uppercase font-bold text-purple-400 mb-0.5">
+                              <Cpu className="w-3.5 h-3.5" />
+                              <span>CPU</span>
+                            </div>
+                            <span className="text-xs font-black text-white truncate max-w-full" title={specs.cpu}>
+                              {specs.shortCpu}
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-blue-950/20 border border-blue-500/20">
+                            <div className="flex items-center gap-1 text-[10px] uppercase font-bold text-blue-400 mb-0.5">
+                              <Database className="w-3.5 h-3.5" />
+                              <span>RAM</span>
+                            </div>
+                            <span className="text-xs font-black text-white truncate max-w-full" title={specs.ram}>
+                              {specs.shortRam}
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-emerald-950/20 border border-emerald-500/20">
+                            <div className="flex items-center gap-1 text-[10px] uppercase font-bold text-emerald-400 mb-0.5">
+                              <HardDrive className="w-3.5 h-3.5" />
+                              <span>Disk</span>
+                            </div>
+                            <span className="text-xs font-black text-white truncate max-w-full" title={specs.disk}>
+                              {specs.shortDisk}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Detailed Specs list */}
+                        <div className="space-y-3 mb-8 text-xs flex-1">
+                          <div className="flex items-center gap-3 text-slate-200 border-b border-white/5 pb-2.5">
+                            <Cpu className="w-4 h-4 text-purple-400 shrink-0" />
+                            <span className="text-slate-400 w-24 shrink-0 font-medium">CPU:</span>
+                            <span className="font-semibold text-white truncate">{specs.cpu}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-slate-200 border-b border-white/5 pb-2.5">
+                            <Database className="w-4 h-4 text-blue-400 shrink-0" />
+                            <span className="text-slate-400 w-24 shrink-0 font-medium">RAM:</span>
+                            <span className="font-semibold text-white truncate">{specs.ram}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-slate-200 border-b border-white/5 pb-2.5">
+                            <HardDrive className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span className="text-slate-400 w-24 shrink-0 font-medium">Disk / Storage:</span>
+                            <span className="font-semibold text-white truncate">{specs.disk}</span>
+                          </div>
+                          {specs.bandwidth && specs.bandwidth !== 'N/A' && (
+                            <div className="flex items-center gap-3 text-slate-200 border-b border-white/5 pb-2.5">
+                              <Wifi className="w-4 h-4 text-cyan-400 shrink-0" />
+                              <span className="text-slate-400 w-24 shrink-0 font-medium">Bandwidth:</span>
+                              <span className="font-semibold text-white truncate">{specs.bandwidth}</span>
+                            </div>
+                          )}
+                          {specs.network && (
+                            <div className="flex items-center gap-3 text-slate-200 border-b border-white/5 pb-2.5">
+                              <Wifi className="w-4 h-4 text-indigo-400 shrink-0" />
+                              <span className="text-slate-400 w-24 shrink-0 font-medium">Network:</span>
+                              <span className="font-semibold text-white truncate">{specs.network}</span>
+                            </div>
+                          )}
+                          {specs.ddos && (
+                            <div className="flex items-center gap-3 text-slate-200 border-b border-white/5 pb-2.5">
+                              <Shield className="w-4 h-4 text-amber-400 shrink-0" />
+                              <span className="text-slate-400 w-24 shrink-0 font-medium">DDoS Defense:</span>
+                              <span className="font-semibold text-white truncate">{specs.ddos}</span>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
 
                   {/* Feature list */}
                   {plan.features && plan.features.length > 0 && (

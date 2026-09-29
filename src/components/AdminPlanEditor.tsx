@@ -7,6 +7,7 @@ import {
 , ChevronDown} from "lucide-react";
 import { AdminHostingPlan, AdminCategory } from '../types';
 import { formatINR } from '../utils/currency';
+import { compressImageFile } from '../utils/imageCompress';
 
 interface AdminPlanEditorProps {
   plan?: AdminHostingPlan;
@@ -106,12 +107,13 @@ export function AdminPlanEditor({ plan, categories, onSave, onAutoSave, onClose,
       seoTitle,
       seoDescription,
       // Legacy fields mapping for backwards compatibility
-      cpu: specs.find(s => s.label.toLowerCase().includes('cpu'))?.value || '',
-      ram: specs.find(s => s.label.toLowerCase().includes('memory') || s.label.toLowerCase().includes('ram'))?.value || '',
-      storage: specs.find(s => s.label.toLowerCase().includes('storage'))?.value || '',
-      bandwidth: specs.find(s => s.label.toLowerCase().includes('bandwidth'))?.value || '',
-      network: specs.find(s => s.label.toLowerCase().includes('network'))?.value || '',
-      ddos: specs.find(s => s.label.toLowerCase().includes('ddos'))?.value || '',
+      cpu: specs.find(s => /cpu|processor|core/i.test(s.label))?.value || plan?.cpu || '',
+      ram: specs.find(s => /memory|ram/i.test(s.label))?.value || plan?.ram || '',
+      storage: specs.find(s => /storage|disk|nvme|ssd/i.test(s.label))?.value || plan?.storage || (plan as any)?.disk || '',
+      disk: specs.find(s => /storage|disk|nvme|ssd/i.test(s.label))?.value || plan?.storage || (plan as any)?.disk || '',
+      bandwidth: specs.find(s => /bandwidth|traffic/i.test(s.label))?.value || plan?.bandwidth || '',
+      network: specs.find(s => /network|uplink|port/i.test(s.label))?.value || plan?.network || '',
+      ddos: specs.find(s => /ddos|mitigation/i.test(s.label))?.value || plan?.ddos || '',
     };
   };
 
@@ -141,30 +143,38 @@ export function AdminPlanEditor({ plan, categories, onSave, onAutoSave, onClose,
     }, 600); // Simulate network delay for UX
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string>>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string>>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        onShowToast('File size must be less than 5MB', 'error');
+      if (file.size > 10 * 1024 * 1024) {
+        onShowToast('File size must be less than 10MB', 'error');
         return;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => setter(reader.result as string);
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file, 800, 800, 0.82);
+        setter(compressed);
+        onShowToast('Image optimized & uploaded', 'info');
+      } catch {
+        onShowToast('Failed to process image file', 'error');
+      }
     }
   };
 
-  const handleDrop = (e: React.DragEvent, setter: React.Dispatch<React.SetStateAction<string>>) => {
+  const handleDrop = async (e: React.DragEvent, setter: React.Dispatch<React.SetStateAction<string>>) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith('image/')) {
-      if (file.size > 5 * 1024 * 1024) {
-        onShowToast('File size must be less than 5MB', 'error');
+      if (file.size > 10 * 1024 * 1024) {
+        onShowToast('File size must be less than 10MB', 'error');
         return;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => setter(reader.result as string);
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file, 800, 800, 0.82);
+        setter(compressed);
+        onShowToast('Image optimized & uploaded', 'info');
+      } catch {
+        onShowToast('Failed to process image file', 'error');
+      }
     }
   };
 

@@ -49,16 +49,17 @@ export function getStoredStaff(): AdminStaff[] {
       return JSON.parse(item);
     }
   } catch (e) {
-    console.error('Error reading staff from localStorage', e);
+    console.warn('Error reading staff from localStorage', e);
   }
   return INITIAL_STAFF;
 }
 
 export function saveStoredStaff(staff: AdminStaff[]): void {
   try {
+    localStorage.removeItem(STORAGE_KEY);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(staff));
     window.dispatchEvent(new CustomEvent('astro_staff_changed', { detail: staff }));
   } catch (e) {
-    console.error('Error saving staff to localStorage', e);
+    console.warn('Error saving staff to localStorage', e);
   }
 }

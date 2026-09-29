@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Cpu, Server, HardDrive, Globe, CheckCircle2, ShoppingCart, Zap, Box } from 'lucide-react';
+import { ArrowLeft, Cpu, Server, HardDrive, Database, Globe, CheckCircle2, ShoppingCart, Zap, Box } from 'lucide-react';
 import { AdminCategory, AdminHostingPlan } from '../types';
 import { getStoredCategories } from '../utils/categorySync';
 import { getStoredPlans } from '../utils/planSync';
 import { formatINR } from '../utils/currency';
+import { getPlanSpecs } from '../utils/specFormat';
 
 interface CategoryPlansProps {
   categoryId: string;
@@ -151,32 +152,41 @@ export function CategoryPlans({ categoryId, onBack, onRequestPlan }: CategoryPla
                         <span className="text-slate-400 text-sm mb-1.5">/mo</span>
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-3">
-                        {plan.cpu && (
-                          <div className="flex items-center gap-2 bg-slate-950/50 p-2.5 rounded-xl border border-white/5">
-                            <Cpu className="w-4 h-4 text-purple-400" />
-                            <span className="text-xs font-semibold text-slate-300">{plan.cpu}</span>
+                      {(() => {
+                        const specs = getPlanSpecs(plan);
+                        return (
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <div className="flex items-center gap-2 bg-slate-950/60 p-2.5 rounded-xl border border-white/5">
+                              <Cpu className="w-4 h-4 text-purple-400 shrink-0" />
+                              <div className="min-w-0">
+                                <span className="block text-[10px] text-slate-400 font-semibold uppercase">CPU</span>
+                                <span className="text-xs font-semibold text-white truncate block" title={specs.cpu}>{specs.cpu}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 bg-slate-950/60 p-2.5 rounded-xl border border-white/5">
+                              <Database className="w-4 h-4 text-blue-400 shrink-0" />
+                              <div className="min-w-0">
+                                <span className="block text-[10px] text-slate-400 font-semibold uppercase">RAM</span>
+                                <span className="text-xs font-semibold text-white truncate block" title={specs.ram}>{specs.ram}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 bg-slate-950/60 p-2.5 rounded-xl border border-white/5">
+                              <HardDrive className="w-4 h-4 text-emerald-400 shrink-0" />
+                              <div className="min-w-0">
+                                <span className="block text-[10px] text-slate-400 font-semibold uppercase">Disk</span>
+                                <span className="text-xs font-semibold text-white truncate block" title={specs.disk}>{specs.disk}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 bg-slate-950/60 p-2.5 rounded-xl border border-white/5">
+                              <Globe className="w-4 h-4 text-amber-400 shrink-0" />
+                              <div className="min-w-0">
+                                <span className="block text-[10px] text-slate-400 font-semibold uppercase">Bandwidth</span>
+                                <span className="text-xs font-semibold text-white truncate block" title={specs.bandwidth}>{specs.bandwidth}</span>
+                              </div>
+                            </div>
                           </div>
-                        )}
-                        {plan.ram && (
-                          <div className="flex items-center gap-2 bg-slate-950/50 p-2.5 rounded-xl border border-white/5">
-                            <Server className="w-4 h-4 text-blue-400" />
-                            <span className="text-xs font-semibold text-slate-300">{plan.ram}</span>
-                          </div>
-                        )}
-                        {plan.storage && (
-                          <div className="flex items-center gap-2 bg-slate-950/50 p-2.5 rounded-xl border border-white/5">
-                            <HardDrive className="w-4 h-4 text-emerald-400" />
-                            <span className="text-xs font-semibold text-slate-300">{plan.storage}</span>
-                          </div>
-                        )}
-                        {plan.bandwidth && (
-                          <div className="flex items-center gap-2 bg-slate-950/50 p-2.5 rounded-xl border border-white/5">
-                            <Globe className="w-4 h-4 text-amber-400" />
-                            <span className="text-xs font-semibold text-slate-300">{plan.bandwidth}</span>
-                          </div>
-                        )}
-                      </div>
+                        );
+                      })()}
                     </div>
 
                     <div className="mb-6 flex-1">
